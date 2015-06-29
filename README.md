@@ -34,3 +34,6 @@ You can test that the script worked with:
 To modify this list, edit the file ruleset.xml
 There are examples of ruleset files at the bottom of http://docs.oracle.com/javase/7/docs/technotes/guides/jweb/security/deployment_rules.html
 
+## KNOWN ERRORS
+You will surely see keytool.exe errors/warning, don't be afraid it's normal, if you see the message DONE, in green, at the end of the execution it means script should have worked as expected =)
+
