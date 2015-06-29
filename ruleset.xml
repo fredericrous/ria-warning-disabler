@@ -1,0 +1,6 @@
+<ruleset version="1.0+">
+    <rule>
+        <id location="*.oracle.com" />
+        <action permission="run" />
+    </rule>
+</ruleset>
