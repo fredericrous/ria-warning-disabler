@@ -68,13 +68,16 @@ $keytoolExe = Join-Path $jdkPath "bin\keytool.exe"
 $jarsignerExe = Join-Path $jdkPath "bin\jarsigner.exe"
 $certutilExe = "C:\Windows\System32\certutil.exe"
 
-$rulesetPath = (Resolve-Path "ruleset.xml").path
-$currPath = Split-Path $rulesetPath
+#We could have used PSScriptRoot but it's only brought by powershell 3
+$currPath = split-path -parent $MyInvocation.MyCommand.Definition
+
+$rulesetPath = Join-Path $currPath "ruleset.xml"
 $keystoreJKS = Join-Path $currPath "keystore.jks"
 $certPath = Join-Path $currPath "Cert.cer"
 
 #ruleset must be in the same folder of jar.exe. Specifying a path doesn't work
 Copy-Item $rulesetPath -Destination (Split-Path $jarExe) -force
+Push-Location $currPath
 &$jarExe -cvf DeploymentRuleSet.jar "ruleset.xml"
 
 #create a certificate to selfsign our deployment rules. will be valid for a year
@@ -84,20 +87,36 @@ Copy-Item $rulesetPath -Destination (Split-Path $jarExe) -force
 #add certificate to windows
 &$certutilExe -addstore -f "TrustedPublisher" $certPath
 
-$jreX64 = Get-ChildItem "C:\Program Files\Java\"
-$jreX86 = Get-ChildItem "C:\Program Files (x86)\Java\"
-$jreList = $jreX64 +$jreX86
+$jdkX64List = Get-ChildItem -Path "HKLM:\SOFTWARE\JavaSoft\Java Development Kit" -erroraction 'silentlycontinue' | % { (Get-ItemProperty -Path Registry::$_ -erroraction 'silentlycontinue').JavaHome }
+$jdkX86List = Get-ChildItem -Path "HKLM:\SOFTWARE\Wow6432Node\JavaSoft\Java Development Kit" -erroraction 'silentlycontinue' | % { (Get-ItemProperty -Path Registry::$_ -erroraction 'silentlycontinue').JavaHome }
+$jdkList = $jdkX64List + $jdkX86List
+
+$jreX64List = Get-ChildItem -Path "HKLM:\SOFTWARE\JavaSoft\Java Runtime Environment" -erroraction 'silentlycontinue' | % { (Get-ItemProperty -Path Registry::$_ -erroraction 'silentlycontinue').JavaHome }
+$jreX86List = Get-ChildItem -Path "HKLM:\SOFTWARE\Wow6432Node\JavaSoft\Java Runtime Environment" -erroraction 'silentlycontinue' | % { (Get-ItemProperty -Path Registry::$_ -erroraction 'silentlycontinue').JavaHome }
+$jreList = $jreX64List + $jreX86List
+
+foreach ($jdkItem in $jdkList)
+{
+	if (Test-Path "$jdkItem\jre")
+	{
+		$jreList += "$jdkItem\jre"
+	}
+}
+if ($jdk)
+{
+	$jreList += "$jdk\jre"
+}
+
 #for each jre and jdk, install  the certificate to the keystore of the jre/jdk.
 foreach ($jre in $jreList)
 {
-    $cacertsPath = Join-Path $jre.FullName “lib\security\cacerts”
+    $cacertsPath = Join-Path $jre "lib\security\cacerts"
     if (Test-Path $cacertsPath)
     {
         #NOTE: default storepass is changeit
-        &$keytoolExe -delete -alias selfsigned -keystore $cacertsPath -storepass changeit -noprompt
+        &$keytoolExe -delete -alias selfsigned -keystore $cacertsPath -storepass changeit -noprompt >$null 2>&1
         &$keytoolExe -importcert -keystore $cacertsPath -storepass changeit -file $certPath -alias selfsigned -noprompt
     }
-    #&$keytoolExe -importkeystore -deststorepass password -destkeystore $keystoreJKS -srcKeystore $certPath -srcstoretype pkcs12 -srcstorepass password
 }
 
 #sign the deployment rule jar
@@ -115,6 +134,6 @@ mi DeploymentRuleSet.jar $javaDeployementPath -Force
 #remove generated files
 ri $keystoreJKS
 #ri $certPath #dont remove certificate because it could be used for deployer_only
-
-Write-Warning "If you enconter any problem loading the RIA, remove the file $javaDeployementPath\DeploymentRuleSet.jar"
+Pop-Location
+Write-Warning "If you encounter any problem loading the RIA, remove the file $javaDeployementPath\DeploymentRuleSet.jar"
 Write-Host "DONE`n" -foreground "green"
