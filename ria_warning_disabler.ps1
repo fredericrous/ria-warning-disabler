@@ -89,11 +89,11 @@ Push-Location $currPath
 
 $jdkX64List = Get-ChildItem -Path "HKLM:\SOFTWARE\JavaSoft\Java Development Kit" -erroraction 'silentlycontinue' | % { (Get-ItemProperty -Path Registry::$_ -erroraction 'silentlycontinue').JavaHome }
 $jdkX86List = Get-ChildItem -Path "HKLM:\SOFTWARE\Wow6432Node\JavaSoft\Java Development Kit" -erroraction 'silentlycontinue' | % { (Get-ItemProperty -Path Registry::$_ -erroraction 'silentlycontinue').JavaHome }
-$jdkList = $jdkX64List + $jdkX86List
+$jdkList = @() + $jdkX64List + $jdkX86List
 
 $jreX64List = Get-ChildItem -Path "HKLM:\SOFTWARE\JavaSoft\Java Runtime Environment" -erroraction 'silentlycontinue' | % { (Get-ItemProperty -Path Registry::$_ -erroraction 'silentlycontinue').JavaHome }
 $jreX86List = Get-ChildItem -Path "HKLM:\SOFTWARE\Wow6432Node\JavaSoft\Java Runtime Environment" -erroraction 'silentlycontinue' | % { (Get-ItemProperty -Path Registry::$_ -erroraction 'silentlycontinue').JavaHome }
-$jreList = $jreX64List + $jreX86List
+$jreList = @() + $jreX64List + $jreX86List
 
 foreach ($jdkItem in $jdkList)
 {
@@ -108,7 +108,7 @@ if ($jdk)
 }
 
 #for each jre and jdk, install  the certificate to the keystore of the jre/jdk.
-foreach ($jre in $jreList)
+foreach ($jre in $($jreList | select -uniq))
 {
     $cacertsPath = Join-Path $jre "lib\security\cacerts"
     if (Test-Path $cacertsPath)
@@ -116,6 +116,7 @@ foreach ($jre in $jreList)
         #NOTE: default storepass is changeit
         &$keytoolExe -delete -alias selfsigned -keystore $cacertsPath -storepass changeit -noprompt >$null 2>&1
         &$keytoolExe -importcert -keystore $cacertsPath -storepass changeit -file $certPath -alias selfsigned -noprompt
+        Write-Host "certificate imported to jre store $jre`n"
     }
 }
 
